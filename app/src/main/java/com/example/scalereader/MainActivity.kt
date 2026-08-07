@@ -11,19 +11,50 @@ import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import com.example.scalereader.databinding.ActivityMainBinding // Sesuaikan jika menggunakan ViewBinding, atau pakai findViewById di bawah
 import java.util.concurrent.Executors
 
 class MainActivity : AppCompatActivity() {
+
+    private val CAMERA_REQUEST_CODE = 100
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        // Cek izin kamera
+        // Cek apakah izin kamera sudah diberikan
         if (allPermissionsGranted()) {
             startCamera()
         } else {
-            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CAMERA), 10)
+            // Jika belum, minta izin secara pop-up ke pengguna
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(Manifest.permission.CAMERA),
+                CAMERA_REQUEST_CODE
+            )
+        }
+    }
+
+    private fun allPermissionsGranted(): Boolean {
+        return ContextCompat.checkSelfPermission(
+            this, Manifest.permission.CAMERA
+        ) == PackageManager.PERMISSION_GRANTED
+    }
+
+    // Menangkap pilihan pengguna pada pop-up izin
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == CAMERA_REQUEST_CODE) {
+            if (allPermissionsGranted()) {
+                startCamera()
+            } else {
+                Toast.makeText(this, "Izin kamera ditolak. Aplikasi tidak bisa berjalan.", Toast.LENGTH_LONG).show()
+                finish() // Menutup aplikasi jika izin ditolak
+            }
         }
     }
 
@@ -33,15 +64,12 @@ class MainActivity : AppCompatActivity() {
         cameraProviderFuture.addListener({
             val cameraProvider = cameraProviderFuture.get()
 
-            // Inisialisasi ScaleImageAnalyzer dengan 3 parameter yang lengkap
             val imageAnalyzer = ScaleImageAnalyzer(
                 context = this,
                 onWeightDetected = { weight -> 
-                    // Parameter ini sekarang terisi agar tidak error kompilasi
                     android.util.Log.d("ScaleReader", "Berat terdeteksi: $weight")
                 },
                 onStatusUpdate = { message ->
-                    // Memunculkan Toast ke layar HP saat pengiriman data sukses/gagal
                     runOnUiThread {
                         Toast.makeText(this, message, Toast.LENGTH_LONG).show()
                     }
@@ -53,18 +81,22 @@ class MainActivity : AppCompatActivity() {
                 .build()
                 .also { it.setAnalyzer(Executors.newSingleThreadExecutor(), imageAnalyzer) }
 
-            val preview = Preview.Builder().build()
-            
+            val preview = Preview.Builder().build().also {
+                // Menghubungkan preview kamera ke PreviewView di activity_main.xml
+                it.setSurfaceProvider(findViewById<androidx.camera.view.PreviewView>(R.id.previewView).surfaceProvider)
+            }
+
             try {
                 cameraProvider.unbindAll()
-                cameraProvider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysisUseCase)
+                cameraProvider.bindToLifecycle(
+                    this, 
+                    CameraSelector.DEFAULT_BACK_CAMERA, 
+                    preview, 
+                    analysisUseCase
+                )
             } catch (e: Exception) {
                 e.printStackTrace()
             }
         }, ContextCompat.getMainExecutor(this))
     }
-
-    private fun allPermissionsGranted() = ContextCompat.checkSelfPermission(
-        this, Manifest.permission.CAMERA
-    ) == PackageManager.PERMISSION_GRANTED
 }
