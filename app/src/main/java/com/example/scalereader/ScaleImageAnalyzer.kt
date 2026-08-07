@@ -11,6 +11,11 @@ import androidx.camera.core.ImageProxy
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import java.io.OutputStreamWriter
+import java.net.HttpURLConnection
+import java.net.URL
+import java.net.URLEncoder
+import java.util.concurrent.Executors
 
 class ScaleImageAnalyzer(
     private val context: Context,
@@ -25,6 +30,8 @@ class ScaleImageAnalyzer(
     private var consecutiveCount = 0
     private var lastSentValue = ""
     private val requiredStabilityCount = 2
+
+    private val networkExecutor = Executors.newSingleThreadExecutor()
 
     @OptIn(ExperimentalGetImage::class)
     override fun analyze(imageProxy: ImageProxy) {
@@ -68,7 +75,31 @@ class ScaleImageAnalyzer(
         if (consecutiveCount >= requiredStabilityCount && currentWeight != lastSentValue) {
             lastSentValue = currentWeight
             triggerVibration()
+            sendToGoogleForm(currentWeight)
             onWeightDetected(currentWeight)
+        }
+    }
+
+    private fun sendToGoogleForm(weight: String) {
+        networkExecutor.execute {
+            try {
+                val formUrl = "https://docs.google.com/forms/d/e/1FAIpQLSf2DVcCrNONx49zxLjcMKTRKhqByvSMHxdteZltxBPwXzckFw/formResponse"
+                val postData = "entry.1928234641=" + URLEncoder.encode(weight, "UTF-8")
+
+                val url = URL(formUrl)
+                val conn = url.openConnection() as HttpURLConnection
+                conn.requestMethod = "POST"
+                conn.doOutput = true
+                conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
+
+                val writer = OutputStreamWriter(conn.outputStream)
+                writer.write(postData)
+                writer.flush()
+                writer.close()
+
+                conn.responseCode
+                conn.disconnect()
+            } catch (_: Exception) {}
         }
     }
 
