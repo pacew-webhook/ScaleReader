@@ -75,7 +75,7 @@ class ScaleImageAnalyzer(
             lastSentValue = currentWeight
             triggerVibration()
             
-            // Kirim data langsung ke Google Sheets Anda
+            // Mengirim data ke Google Sheets dengan URL baru Anda
             sendToGoogleSheets(currentWeight)
             
             onWeightDetected(currentWeight)
@@ -85,14 +85,13 @@ class ScaleImageAnalyzer(
     private fun sendToGoogleSheets(weight: String) {
         networkExecutor.execute {
             try {
-                val webAppUrl = "https://script.google.com/macros/s/AKfycbxD5mXDpZKUhxTCppYeQffzAEDSwySqabdWLwWkxPbUQiVZYRJe6SY8zNeTvbEk9fTB6w/exec"
+                val webAppUrl = "https://script.google.com/macros/s/AKfycbybQTTzgv1ewRStBsncoHxeJqLXmbezHwtcYROHmxvCK8CMmrUHZNc3-bqCAcEzISDkzw/exec"
                 
                 val url = URL(webAppUrl)
                 val conn = url.openConnection() as HttpURLConnection
                 conn.requestMethod = "POST"
                 conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8")
                 
-                // Wajib diaktifkan untuk menangani redirect dari Google Apps Script
                 conn.instanceFollowRedirects = true
                 conn.connectTimeout = 10000
                 conn.readTimeout = 10000
