@@ -21,8 +21,9 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        // Memeriksa izin kamera saat aplikasi pertama kali dibuka
         if (allPermissionsGranted()) {
-            startCamera()
+            initCameraAfterLayoutReady()
         } else {
             ActivityCompat.requestPermissions(
                 this,
@@ -46,7 +47,7 @@ class MainActivity : AppCompatActivity() {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == CAMERA_REQUEST_CODE) {
             if (allPermissionsGranted()) {
-                startCamera()
+                initCameraAfterLayoutReady()
             } else {
                 Toast.makeText(this, "Izin kamera ditolak.", Toast.LENGTH_LONG).show()
                 finish()
@@ -54,34 +55,43 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // Mengamankan inisialisasi agar PreviewView sudah siap secara UI
+    private fun initCameraAfterLayoutReady() {
+        val previewView = findViewById<androidx.camera.view.PreviewView>(R.id.previewView)
+        previewView.post {
+            startCamera()
+        }
+    }
+
     private fun startCamera() {
         val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
 
         cameraProviderFuture.addListener({
-            val cameraProvider = cameraProviderFuture.get()
-
-            val imageAnalyzer = ScaleImageAnalyzer(
-                context = this,
-                onWeightDetected = { weight -> 
-                    android.util.Log.d("ScaleReader", "Berat terdeteksi: $weight")
-                },
-                onStatusUpdate = { message ->
-                    runOnUiThread {
-                        Toast.makeText(this, message, Toast.LENGTH_LONG).show()
-                    }
-                }
-            )
-
-            val analysisUseCase = ImageAnalysis.Builder()
-                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                .build()
-                .also { it.setAnalyzer(Executors.newSingleThreadExecutor(), imageAnalyzer) }
-
-            val preview = Preview.Builder().build().also {
-                it.setSurfaceProvider(findViewById<androidx.camera.view.PreviewView>(R.id.previewView).surfaceProvider)
-            }
-
             try {
+                val cameraProvider = cameraProviderFuture.get()
+
+                val imageAnalyzer = ScaleImageAnalyzer(
+                    context = this,
+                    onWeightDetected = { weight -> 
+                        android.util.Log.d("ScaleReader", "Berat terdeteksi: $weight")
+                    },
+                    onStatusUpdate = { message ->
+                        runOnUiThread {
+                            Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+                        }
+                    }
+                )
+
+                val analysisUseCase = ImageAnalysis.Builder()
+                    .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                    .build()
+                    .also { it.setAnalyzer(Executors.newSingleThreadExecutor(), imageAnalyzer) }
+
+                val previewView = findViewById<androidx.camera.view.PreviewView>(R.id.previewView)
+                val preview = Preview.Builder().build().also {
+                    it.setSurfaceProvider(previewView.surfaceProvider)
+                }
+
                 cameraProvider.unbindAll()
                 cameraProvider.bindToLifecycle(
                     this, 
@@ -91,6 +101,9 @@ class MainActivity : AppCompatActivity() {
                 )
             } catch (e: Exception) {
                 e.printStackTrace()
+                runOnUiThread {
+                    Toast.makeText(this, "Gagal memulai kamera: ${e.message}", Toast.LENGTH_LONG).show()
+                }
             }
         }, ContextCompat.getMainExecutor(this))
     }
