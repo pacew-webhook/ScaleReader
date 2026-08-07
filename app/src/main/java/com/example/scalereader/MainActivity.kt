@@ -3,37 +3,27 @@ package com.example.scalereader
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
-import android.widget.TextView
 import android.widget.Toast
-import androidx.activity.ComponentActivity
+import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
-import androidx.camera.view.PreviewView
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import java.util.concurrent.Executors
 
-class MainActivity : ComponentActivity() {
-
-    private lateinit var previewView: PreviewView
-    private lateinit var tvWeight: TextView
-    private val cameraExecutor = Executors.newSingleThreadExecutor()
+class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
+        setContentView(R.layout.activity_main) // Pastikan layout ini ada
 
-        previewView = findViewById(R.id.previewView)
-        tvWeight = findViewById(R.id.tvWeight)
-
+        // Cek izin kamera
         if (allPermissionsGranted()) {
             startCamera()
         } else {
-            ActivityCompat.requestPermissions(
-                this, REQUIRED_PERMISSIONS, REQUEST_CODE_PERMISSIONS
-            )
+            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CAMERA), 10)
         }
     }
 
@@ -43,59 +33,36 @@ class MainActivity : ComponentActivity() {
         cameraProviderFuture.addListener({
             val cameraProvider = cameraProviderFuture.get()
 
-            val preview = Preview.Builder().build().also {
-                it.setSurfaceProvider(previewView.surfaceProvider)
-            }
+            // 1. Inisialisasi ScaleImageAnalyzer dengan fitur notifikasi
+            val imageAnalyzer = ScaleImageAnalyzer(
+                context = this,
+                onWeightDetected = { weight -> 
+                    // Aksi saat berat terdeteksi (opsional)
+                },
+                onStatusUpdate = { message ->
+                    // 2. Ini akan memunculkan teks notifikasi ke layar HP
+                    Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+                }
+            )
 
-            val imageAnalyzer = ImageAnalysis.Builder()
+            val analysisUseCase = ImageAnalysis.Builder()
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                 .build()
-                .also {
-                    it.setAnalyzer(cameraExecutor, ScaleImageAnalyzer(this) { weight ->
-                        runOnUiThread {
-                            tvWeight.text = weight
-                        }
-                    })
-                }
+                .also { it.setAnalyzer(Executors.newSingleThreadExecutor(), imageAnalyzer) }
 
-            val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
+            val preview = Preview.Builder().build()
+            // Hubungkan preview ke UI Anda jika ada (misal: previewView)
 
             try {
                 cameraProvider.unbindAll()
-                cameraProvider.bindToLifecycle(
-                    this, cameraSelector, preview, imageAnalyzer
-                )
-            } catch (exc: Exception) {
-                Toast.makeText(this, "Gagal membuka kamera", Toast.LENGTH_SHORT).show()
+                cameraProvider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysisUseCase)
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
-
         }, ContextCompat.getMainExecutor(this))
     }
 
-    private fun allPermissionsGranted() = REQUIRED_PERMISSIONS.all {
-        ContextCompat.checkSelfPermission(baseContext, it) == PackageManager.PERMISSION_GRANTED
-    }
-
-    override fun onRequestPermissionsResult(
-        requestCode: Int, permissions: Array<String>, grantResults: IntArray
-    ) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == REQUEST_CODE_PERMISSIONS) {
-            if (allPermissionsGranted()) {
-                startCamera()
-            } else {
-                Toast.makeText(this, "Izin kamera dibutuhkan", Toast.LENGTH_SHORT).show()
-            }
-        }
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        cameraExecutor.shutdown()
-    }
-
-    companion object {
-        private const val REQUEST_CODE_PERMISSIONS = 10
-        private val REQUIRED_PERMISSIONS = arrayOf(Manifest.permission.CAMERA)
-    }
+    private fun allPermissionsGranted() = ContextCompat.checkSelfPermission(
+        this, Manifest.permission.CAMERA
+    ) == PackageManager.PERMISSION_GRANTED
 }
