@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
+import android.widget.Toast
 import androidx.annotation.OptIn
 import androidx.camera.core.ExperimentalGetImage
 import androidx.camera.core.ImageAnalysis
@@ -18,18 +19,17 @@ import java.util.concurrent.Executors
 
 class ScaleImageAnalyzer(
     private val context: Context,
-    private val onWeightDetected: (String) -> Unit
+    private val onWeightDetected: (String) -> Unit,
+    private val onStatusUpdate: (String) -> Unit // Callback untuk notifikasi UI
 ) : ImageAnalysis.Analyzer {
 
     private val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
     private var lastAnalyzedTimestamp = 0L
     private val scanIntervalMs = 500L
-
     private var lastDetectedValue = ""
     private var consecutiveCount = 0
     private var lastSentValue = ""
     private val requiredStabilityCount = 2
-
     private val networkExecutor = Executors.newSingleThreadExecutor()
 
     @OptIn(ExperimentalGetImage::class)
@@ -55,9 +55,7 @@ class ScaleImageAnalyzer(
                         }
                     }
                 }
-                .addOnCompleteListener {
-                    imageProxy.close()
-                }
+                .addOnCompleteListener { imageProxy.close() }
         } else {
             imageProxy.close()
         }
@@ -74,10 +72,7 @@ class ScaleImageAnalyzer(
         if (consecutiveCount >= requiredStabilityCount && currentWeight != lastSentValue) {
             lastSentValue = currentWeight
             triggerVibration()
-            
-            // Mengirim data ke Google Sheets dengan URL baru Anda
             sendToGoogleSheets(currentWeight)
-            
             onWeightDetected(currentWeight)
         }
     }
@@ -86,40 +81,35 @@ class ScaleImageAnalyzer(
         networkExecutor.execute {
             try {
                 val webAppUrl = "https://script.google.com/macros/s/AKfycbybQTTzgv1ewRStBsncoHxeJqLXmbezHwtcYROHmxvCK8CMmrUHZNc3-bqCAcEzISDkzw/exec"
-                
                 val url = URL(webAppUrl)
                 val conn = url.openConnection() as HttpURLConnection
                 conn.requestMethod = "POST"
                 conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8")
-                
                 conn.instanceFollowRedirects = true
-                conn.connectTimeout = 10000
-                conn.readTimeout = 10000
                 conn.doOutput = true
 
-                val jsonPayload = """
-                    {
-                        "weight": ${weight.toDoubleOrNull() ?: 0.0},
-                        "unit": "kg"
-                    }
-                """.trimIndent()
-
-                OutputStreamWriter(conn.outputStream, "UTF-8").use { writer ->
-                    writer.write(jsonPayload)
-                    writer.flush()
-                }
+                val jsonPayload = """{"weight": ${weight.toDoubleOrNull() ?: 0.0}, "unit": "kg"}"""
+                OutputStreamWriter(conn.outputStream, "UTF-8").use { it.write(jsonPayload); it.flush() }
 
                 val responseCode = conn.responseCode
+                (context as? android.app.Activity)?.runOnUiThread {
+                    if (responseCode == 200) {
+                        onStatusUpdate("Data $weight kg berhasil terkirim!")
+                    } else {
+                        onStatusUpdate("Gagal kirim, kode: $responseCode")
+                    }
+                }
                 conn.disconnect()
             } catch (e: Exception) {
-                e.printStackTrace()
+                (context as? android.app.Activity)?.runOnUiThread {
+                    onStatusUpdate("Error: ${e.message}")
+                }
             }
         }
     }
 
     private fun triggerVibration() {
         try {
-            @Suppress("DEPRECATION")
             val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 vibrator?.vibrate(VibrationEffect.createOneShot(100, VibrationEffect.DEFAULT_AMPLITUDE))
