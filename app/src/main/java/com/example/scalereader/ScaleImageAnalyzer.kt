@@ -2,9 +2,10 @@ package com.example.scalereader
 
 import android.content.Context
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.VibrationEffect
 import android.os.Vibrator
-import android.widget.Toast
 import androidx.annotation.OptIn
 import androidx.camera.core.ExperimentalGetImage
 import androidx.camera.core.ImageAnalysis
@@ -20,7 +21,7 @@ import java.util.concurrent.Executors
 class ScaleImageAnalyzer(
     private val context: Context,
     private val onWeightDetected: (String) -> Unit,
-    private val onStatusUpdate: (String) -> Unit // Callback untuk notifikasi UI
+    private val onStatusUpdate: (String) -> Unit
 ) : ImageAnalysis.Analyzer {
 
     private val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
@@ -31,6 +32,7 @@ class ScaleImageAnalyzer(
     private var lastSentValue = ""
     private val requiredStabilityCount = 2
     private val networkExecutor = Executors.newSingleThreadExecutor()
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     @OptIn(ExperimentalGetImage::class)
     override fun analyze(imageProxy: ImageProxy) {
@@ -92,7 +94,7 @@ class ScaleImageAnalyzer(
                 OutputStreamWriter(conn.outputStream, "UTF-8").use { it.write(jsonPayload); it.flush() }
 
                 val responseCode = conn.responseCode
-                (context as? android.app.Activity)?.runOnUiThread {
+                mainHandler.post {
                     if (responseCode == 200) {
                         onStatusUpdate("Data $weight kg berhasil terkirim!")
                     } else {
@@ -101,7 +103,7 @@ class ScaleImageAnalyzer(
                 }
                 conn.disconnect()
             } catch (e: Exception) {
-                (context as? android.app.Activity)?.runOnUiThread {
+                mainHandler.post {
                     onStatusUpdate("Error: ${e.message}")
                 }
             }
