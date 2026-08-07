@@ -17,7 +17,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main) // Pastikan layout ini ada
+        setContentView(R.layout.activity_main)
 
         // Cek izin kamera
         if (allPermissionsGranted()) {
@@ -33,15 +33,18 @@ class MainActivity : AppCompatActivity() {
         cameraProviderFuture.addListener({
             val cameraProvider = cameraProviderFuture.get()
 
-            // 1. Inisialisasi ScaleImageAnalyzer dengan fitur notifikasi
+            // Inisialisasi ScaleImageAnalyzer dengan 3 parameter yang lengkap
             val imageAnalyzer = ScaleImageAnalyzer(
                 context = this,
                 onWeightDetected = { weight -> 
-                    // Aksi saat berat terdeteksi (opsional)
+                    // Parameter ini sekarang terisi agar tidak error kompilasi
+                    android.util.Log.d("ScaleReader", "Berat terdeteksi: $weight")
                 },
                 onStatusUpdate = { message ->
-                    // 2. Ini akan memunculkan teks notifikasi ke layar HP
-                    Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+                    // Memunculkan Toast ke layar HP saat pengiriman data sukses/gagal
+                    runOnUiThread {
+                        Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+                    }
                 }
             )
 
@@ -51,8 +54,7 @@ class MainActivity : AppCompatActivity() {
                 .also { it.setAnalyzer(Executors.newSingleThreadExecutor(), imageAnalyzer) }
 
             val preview = Preview.Builder().build()
-            // Hubungkan preview ke UI Anda jika ada (misal: previewView)
-
+            
             try {
                 cameraProvider.unbindAll()
                 cameraProvider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysisUseCase)
