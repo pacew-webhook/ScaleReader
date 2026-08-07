@@ -79,7 +79,8 @@ class ScaleImageAnalyzer(
     private fun sendToGoogleSheets(weight: String) {
         networkExecutor.execute {
             try {
-                val webAppUrl = "https://script.google.com/macros/s/AKfycbybQTTzgv1ewRStBsncoHxeJqLXmbezHwtcYROHmxvCK8CMmrUHZNc3-bqCAcEzISDkzw/exec"
+                val webAppUrl = "https://script.google.com/macros/s/AKfycbzFg3_tQAgU0MUGjpAW4jcB6AJf3VxIE6RCsptHV4KfI-9us2VolTDnSl4fPN8bPRmzrg/exec"
+                
                 val url = URL(webAppUrl)
                 val conn = url.openConnection() as HttpURLConnection
                 conn.requestMethod = "POST"
@@ -92,7 +93,6 @@ class ScaleImageAnalyzer(
 
                 val responseCode = conn.responseCode
                 
-                // Menggunakan Activity runOnUiThread asli yang aman jika activity sedang aktif
                 val activity = context as? android.app.Activity
                 activity?.runOnUiThread {
                     if (responseCode == 200) {
