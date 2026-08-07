@@ -2,8 +2,6 @@ package com.example.scalereader
 
 import android.content.Context
 import android.os.Build
-import android.os.Handler
-import android.os.Looper
 import android.os.VibrationEffect
 import android.os.Vibrator
 import androidx.annotation.OptIn
@@ -32,7 +30,6 @@ class ScaleImageAnalyzer(
     private var lastSentValue = ""
     private val requiredStabilityCount = 2
     private val networkExecutor = Executors.newSingleThreadExecutor()
-    private val mainHandler = Handler(Looper.getMainLooper())
 
     @OptIn(ExperimentalGetImage::class)
     override fun analyze(imageProxy: ImageProxy) {
@@ -94,7 +91,10 @@ class ScaleImageAnalyzer(
                 OutputStreamWriter(conn.outputStream, "UTF-8").use { it.write(jsonPayload); it.flush() }
 
                 val responseCode = conn.responseCode
-                mainHandler.post {
+                
+                // Menggunakan Activity runOnUiThread asli yang aman jika activity sedang aktif
+                val activity = context as? android.app.Activity
+                activity?.runOnUiThread {
                     if (responseCode == 200) {
                         onStatusUpdate("Data $weight kg berhasil terkirim!")
                     } else {
@@ -103,7 +103,8 @@ class ScaleImageAnalyzer(
                 }
                 conn.disconnect()
             } catch (e: Exception) {
-                mainHandler.post {
+                val activity = context as? android.app.Activity
+                activity?.runOnUiThread {
                     onStatusUpdate("Error: ${e.message}")
                 }
             }
