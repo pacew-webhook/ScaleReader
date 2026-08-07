@@ -14,7 +14,6 @@ import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
-import java.net.URLEncoder
 import java.util.concurrent.Executors
 
 class ScaleImageAnalyzer(
@@ -75,31 +74,47 @@ class ScaleImageAnalyzer(
         if (consecutiveCount >= requiredStabilityCount && currentWeight != lastSentValue) {
             lastSentValue = currentWeight
             triggerVibration()
-            sendToGoogleForm(currentWeight)
+            
+            // Kirim data langsung ke Google Sheets Anda
+            sendToGoogleSheets(currentWeight)
+            
             onWeightDetected(currentWeight)
         }
     }
 
-    private fun sendToGoogleForm(weight: String) {
+    private fun sendToGoogleSheets(weight: String) {
         networkExecutor.execute {
             try {
-                val formUrl = "https://docs.google.com/forms/d/e/1FAIpQLSf2DVcCrNONx49zxLjcMKTRKhqByvSMHxdteZltxBPwXzckFw/formResponse"
-                val postData = "entry.1928234641=" + URLEncoder.encode(weight, "UTF-8")
-
-                val url = URL(formUrl)
+                val webAppUrl = "https://script.google.com/macros/s/AKfycbxD5mXDpZKUhxTCppYeQffzAEDSwySqabdWLwWkxPbUQiVZYRJe6SY8zNeTvbEk9fTB6w/exec"
+                
+                val url = URL(webAppUrl)
                 val conn = url.openConnection() as HttpURLConnection
                 conn.requestMethod = "POST"
+                conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8")
+                
+                // Wajib diaktifkan untuk menangani redirect dari Google Apps Script
+                conn.instanceFollowRedirects = true
+                conn.connectTimeout = 10000
+                conn.readTimeout = 10000
                 conn.doOutput = true
-                conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
 
-                val writer = OutputStreamWriter(conn.outputStream)
-                writer.write(postData)
-                writer.flush()
-                writer.close()
+                val jsonPayload = """
+                    {
+                        "weight": ${weight.toDoubleOrNull() ?: 0.0},
+                        "unit": "kg"
+                    }
+                """.trimIndent()
 
-                conn.responseCode
+                OutputStreamWriter(conn.outputStream, "UTF-8").use { writer ->
+                    writer.write(jsonPayload)
+                    writer.flush()
+                }
+
+                val responseCode = conn.responseCode
                 conn.disconnect()
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 
